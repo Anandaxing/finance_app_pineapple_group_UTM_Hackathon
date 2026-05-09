@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'register_page.dart';
 import 'home_page.dart';
+import '../database_service.dart';
 
 class LoginPage extends StatelessWidget {
   LoginPage({super.key});
+
+  final DatabaseService databaseService =
+    DatabaseService();
 
   final TextEditingController emailController =
       TextEditingController();
@@ -52,7 +56,20 @@ class LoginPage extends StatelessWidget {
             const SizedBox(height: 20),
 
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
+              String email =
+                  emailController.text.trim();
+
+              String password =
+                  passwordController.text.trim();
+
+              bool isValid =
+                  await databaseService.loginUser(
+                    email,
+                    password,
+                  );
+
+              if (isValid) {
 
                 Navigator.push(
                   context,
@@ -61,7 +78,19 @@ class LoginPage extends StatelessWidget {
                   ),
                 );
 
-              },
+              } else {
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      "Invalid email or password",
+                    ),
+                  ),
+                );
+
+              }
+
+},
 
               child: const Text("Login"),
             ),

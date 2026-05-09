@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart'; // ← add this
 
 import 'pages/login_page.dart';
 import 'pages/register_page.dart';
 import 'pages/home_page.dart';
 
-void main() {
+Future<void> main() async {                              // ← async
+  WidgetsFlutterBinding.ensureInitialized();             // ← add this
+  await dotenv.load(fileName: ".env");                   // ← add this
   runApp(const MyApp());
 }
 

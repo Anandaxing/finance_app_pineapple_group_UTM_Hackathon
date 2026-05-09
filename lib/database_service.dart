@@ -2,29 +2,43 @@ import 'package:libsql_dart/libsql_dart.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class DatabaseService {
-  // Define the client here
-  // Use 'late' so it doesn't initialize until the first time you call it
-  // late final client = LibsqlClient(dotenv.env['TURSO_DATABASE_URL'] ?? '')
-  //   ..authToken = dotenv.env['TURSO_AUTH_TOKEN'];
-  late final LibsqlClient client = (() {
-    final url = dotenv.env['TURSO_DATABASE_URL'] ?? '';
-    final token = dotenv.env['TURSO_AUTH_TOKEN'] ?? '';
+  LibsqlClient? _client;
 
-    return LibsqlClient(url)..authToken = token;
-  })();
+  LibsqlClient get client {
+    if (_client == null) {
+      final url = dotenv.env['TURSO_DATABASE_URL'] ?? '';
+      final token = dotenv.env['TURSO_AUTH_TOKEN'] ?? '';
 
-  // Example method to fetch data from your online DB
+      if (url.isEmpty) throw StateError('TURSO_DATABASE_URL is not set. Check your .env file.');
+      if (token.isEmpty) throw StateError('TURSO_AUTH_TOKEN is not set. Check your .env file.');
+
+      _client = LibsqlClient(url)..authToken = token;
+    }
+    return _client!;
+  }
+
   Future<void> testConnection() async {
     try {
       print("Attempting to connect to: ${dotenv.env['TURSO_DATABASE_URL']}");
-
       await client.connect();
-
-      // final result = await client.execute("SELECT * FROM user_identity");
       final result = await client.query("SELECT * FROM user_identity");
       print("Remote connection result: $result");
     } catch (e) {
       print("Connection failed: $e");
+    }
+  }
+
+  Future<bool> loginUser(String email, String password) async {
+    try {
+      await client.connect();
+      final result = await client.query(
+      'SELECT * FROM user_identity WHERE user_email = ? AND password = ?',
+      positional: [email, password],
+      );
+      return result.isNotEmpty;
+    } catch (e) {
+      print("Login error: $e");
+      return false;
     }
   }
 }
