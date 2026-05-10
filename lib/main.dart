@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-
+import 'pages/transfer_page.dart';
 import 'pages/verify_page.dart';
 import 'pages/login_page.dart';
 import 'pages/register_page.dart';
@@ -35,6 +35,7 @@ class FinancialApp extends StatelessWidget {
         '/register': (context) => RegisterPage(),
         '/verify': (context) => const VerifyPage(),  // ← add this
         '/home': (context) => HomePage(),
+        '/transfer': (context) => const TransferPage(), // ← add
       }, 
     ); 
   } 

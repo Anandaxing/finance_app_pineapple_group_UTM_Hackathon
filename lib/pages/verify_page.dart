@@ -20,12 +20,14 @@ class _VerifyPageState extends State<VerifyPage> {
     final success = await _db.verifyOTP(email, _otpController.text.trim());
     setState(() => _isLoading = false);
 
+    if (!mounted) return;
+
     if (success) {
-      Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Account verified! Please log in."),
             backgroundColor: Colors.green),
       );
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Invalid or expired code."),

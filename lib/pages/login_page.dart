@@ -60,6 +60,8 @@ class LoginPage extends StatelessWidget {
                     password,
                   );
 
+              if (!context.mounted) return;
+
               if (isValid) {
 
                 Navigator.push(
