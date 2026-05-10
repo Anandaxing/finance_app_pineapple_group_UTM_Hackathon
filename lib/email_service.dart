@@ -37,4 +37,34 @@ class EmailService {
       return false;
     }
   }
+
+  static Future<bool> sendPasswordResetEmail(String toEmail, String otp) async {
+    final gmailAddress = dotenv.env['GMAIL_ADDRESS'] ?? '';
+    final gmailPassword = dotenv.env['GMAIL_APP_PASSWORD'] ?? '';
+
+    final smtpServer = gmail(gmailAddress, gmailPassword);
+
+    final message = Message()
+      ..from = Address(gmailAddress, 'Finova App')
+      ..recipients.add(toEmail)
+      ..subject = 'Reset Your Password'
+      ..html = '''
+        <div style="font-family: sans-serif; padding: 24px;">
+          <h2>Reset your Finova password</h2>
+          <p>Your password reset code is:</p>
+          <h1 style="letter-spacing: 8px; color: #D4AF37;">$otp</h1>
+          <p>This code expires in 10 minutes.</p>
+          <p>If you did not request this, please ignore this email.</p>
+        </div>
+      ''';
+
+    try {
+      await send(message, smtpServer);
+      print("Reset email sent to $toEmail");
+      return true;
+    } catch (e) {
+      print("Reset email send error: $e");
+      return false;
+    }
+  }
 }

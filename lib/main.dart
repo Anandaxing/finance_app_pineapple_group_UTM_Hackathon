@@ -5,6 +5,8 @@ import 'pages/verify_page.dart';
 import 'pages/login_page.dart';
 import 'pages/register_page.dart';
 import 'pages/home_page.dart';
+import 'pages/forgot_password_page.dart';
+import 'pages/reset_password_page.dart';
 
 Future<void> main() async {
 
@@ -36,6 +38,8 @@ class FinancialApp extends StatelessWidget {
         '/verify': (context) => const VerifyPage(),  // ← add this
         '/home': (context) => HomePage(),
         '/transfer': (context) => const TransferPage(), // ← add
+        '/forgot-password': (context) => const ForgotPasswordPage(),
+        '/reset-password': (context) => const ResetPasswordPage(),
       }, 
     ); 
   } 

@@ -13,8 +13,15 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final DatabaseService _db = DatabaseService();
   Map<String, dynamic>? _userData;
+  Map<String, double> _budgetStatus = {'daily_max': 0, 'today_spent': 0, 'remaining': 0};
   bool _isLoading = true;
   String? _email;
+
+  // Helper method untuk format RM
+  String _formatRM(dynamic value) {
+    final parsed = double.tryParse(value?.toString() ?? '0') ?? 0.0;
+    return parsed.toStringAsFixed(2);
+  }
 
   @override
   void didChangeDependencies() {
@@ -26,13 +33,12 @@ class _HomePageState extends State<HomePage> {
   Future<void> _loadUser(String email) async {
     final data = await _db.getUserByEmail(email);
     
-    
     if (data != null) {
-      double dailyLimit = (data['max_day'] ?? 0).toDouble();
+      double dailyLimit = (data['daily_max_spending'] ?? 0).toDouble();
       String today = DateTime.now().toIso8601String().split('T')[0];
       
       if (dailyLimit > 0 && data['last_automated_date'] != today) {
-          await _db.subtractBalance(email, dailyLimit); 
+        await _db.subtractBalance(email, dailyLimit); 
       }
     }
 
@@ -116,7 +122,7 @@ class _HomePageState extends State<HomePage> {
                         style: TextStyle(color: Colors.white54, fontSize: 14),
                       ),
                       Text(
-                        "RM ${_userData?['balance'] ?? '0.00'}",
+                        "RM ${_formatRM(_userData?['balance'])}",
                         style: const TextStyle(
                             color: Colors.white,
                             fontSize: 32,
@@ -144,8 +150,55 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                 ),
-
                 
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  margin: const EdgeInsets.symmetric(horizontal: 20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF111827),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withOpacity(0.06)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("DAILY BUDGET", style: TextStyle(color: Colors.white38, fontSize: 11, letterSpacing: 2)),
+                      const SizedBox(height: 12),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: LinearProgressIndicator(
+                          value: _budgetStatus['daily_max']! > 0
+                              ? (_budgetStatus['today_spent']! / _budgetStatus['daily_max']!).clamp(0.0, 1.0)
+                              : 0.0,
+                          minHeight: 8,
+                          backgroundColor: Colors.white10,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            _budgetStatus['remaining']! <= 0
+                                ? Colors.red
+                                : _budgetStatus['today_spent']! / (_budgetStatus['daily_max']! + 0.001) >= 0.75
+                                    ? Colors.orange
+                                    : Colors.greenAccent,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text("Spent: RM ${_budgetStatus['today_spent']!.toStringAsFixed(2)}",
+                              style: const TextStyle(color: Colors.redAccent, fontSize: 13)),
+                          Text("Left: RM ${_budgetStatus['remaining']!.toStringAsFixed(2)}",
+                              style: TextStyle(
+                                color: _budgetStatus['remaining']! <= 0 ? Colors.red : Colors.greenAccent,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              )),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 20),
                   padding: const EdgeInsets.all(15),
@@ -161,16 +214,24 @@ class _HomePageState extends State<HomePage> {
                         children: [
                           const Text("Monthly Limit Status", style: TextStyle(color: Colors.white70)),
                           Text(
-                            "RM ${_userData?['max_month'] ?? '0'}", 
+                            "RM ${_formatRM(_userData?['monthly_max_spending'])}", 
                             style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)
                           ),
                         ],
                       ),
                       const SizedBox(height: 10),
-                      const LinearProgressIndicator(
-                        value: 0.3, 
-                        backgroundColor: Colors.white10,
-                        color: Colors.blueAccent,
+                      Builder(
+                        builder: (context) {
+                          double monthlyLimit = (_userData?['monthly_max_spending'] ?? 0).toDouble();
+                          double balance = (_userData?['balance'] ?? 0).toDouble();
+                          double spent = monthlyLimit > 0 ? (monthlyLimit - balance).clamp(0, monthlyLimit) : 0;
+                          double progress = monthlyLimit > 0 ? (spent / monthlyLimit).clamp(0.0, 1.0) : 0.0;
+                          return LinearProgressIndicator(
+                            value: progress,
+                            backgroundColor: Colors.white10,
+                            color: progress > 0.8 ? Colors.redAccent : Colors.blueAccent,
+                          );
+                        },
                       ),
                       const SizedBox(height: 15),
                       Row(
@@ -178,7 +239,7 @@ class _HomePageState extends State<HomePage> {
                         children: [
                           const Text("Daily Automated", style: TextStyle(color: Colors.white70)),
                           Text(
-                            "RM ${_userData?['max_day'] ?? '0'}/day",
+                            "RM ${_formatRM(_userData?['daily_max_spending'])}/day",
                             style: const TextStyle(color: Colors.greenAccent)
                           ),
                         ],
@@ -187,7 +248,6 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
 
-                
                 Expanded(
                   child: GridView.count(
                     crossAxisCount: 2,

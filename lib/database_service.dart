@@ -1,23 +1,96 @@
 import 'package:libsql_dart/libsql_dart.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:bcrypt/bcrypt.dart';
 
 class DatabaseService {
-  Future<Map<String, dynamic>?> getUserLimits(String email) async {
-    return await getUserByEmail(email); 
+  
+  String _hashPassword(String password) {
+    return BCrypt.hashpw(password, BCrypt.gensalt());
   }
+
+ 
+  bool _verifyPassword(String password, String hashed) {
+    return BCrypt.checkpw(password, hashed);
+  }
+
+  
+  Future<Map<String, dynamic>?> getUserLimits(String email) async {
+    return await getUserByEmail(email);
+  }
+ 
+  Future<bool> saveResetOTP(String email, String otp) async {
+    try {
+      await client.connect();
+      
+      final result = await client.query(
+        'SELECT user_email FROM user_identity WHERE user_email = ?',
+        positional: [email],
+      );
+      if (result.isEmpty) return false;
+
+      final expiry = DateTime.now()
+          .add(const Duration(minutes: 10))
+          .millisecondsSinceEpoch;
+
+      await client.query(
+        'UPDATE user_identity SET otp = ?, otp_expiry = ? WHERE user_email = ?',
+        positional: [otp, expiry, email],
+      );
+      return true;
+    } catch (e) {
+      print("saveResetOTP error: $e");
+      return false;
+    }
+  }
+
+  
+  Future<bool> verifyResetOTPAndUpdatePassword(String email, String otp, String newPassword) async {
+    try {
+      await client.connect();
+      final result = await client.query(
+        'SELECT otp, otp_expiry FROM user_identity WHERE user_email = ?',
+        positional: [email],
+      );
+
+      if (result.isEmpty) return false;
+
+      final storedOtp = result.first['otp'];
+      final expiry = result.first['otp_expiry'] as int;
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      if (storedOtp != otp || now >= expiry) return false;
+
+    
+      final hashedPassword = _hashPassword(newPassword);
+
+      await client.query(
+        'UPDATE user_identity SET password = ?, otp = NULL, otp_expiry = NULL WHERE user_email = ?',
+        positional: [hashedPassword, email],
+      );
+      return true;
+    } catch (e) {
+      print("verifyResetOTP error: $e");
+      return false;
+    }
+  }
+
   Future<bool> updateLimits(String email, double maxMonth, double maxDay) async {
-  try {
-    final user = await getUserByEmail(email);
-    if (user == null) return false;
-    // monthly_max_spending
-    // daily_max_spending
-    print("Limit updated: Monthly RM $maxMonth, Daily RM $maxDay");
-    return true;
+    try {
+      await client.connect();
+      print("updateLimits called → email: $email, maxMonth: $maxMonth, maxDay: $maxDay"); // ← add
+
+      await client.query(
+        'UPDATE user_identity SET monthly_max_spending = ?, daily_max_spending = ?, daily_balance = ? WHERE user_email = ?',
+        positional: [maxMonth, maxDay, maxDay,email],
+      );
+      print("Limit diperbarui: Bulan RM $maxMonth, Hari RM $maxDay");
+      return true;
     } catch (e) {
       print("Error update limits: $e");
-    return false;
+      return false;
+    }
   }
-  }
+
   LibsqlClient? _client;
 
   LibsqlClient get client {
@@ -35,8 +108,6 @@ class DatabaseService {
 
   Future<bool> topUpBalance(String email, double amount) async {
     try {
-      // print("Berhasil top up RM $amount untuk $email");
-      
       await client.query(
         'UPDATE user_identity SET balance = balance + ? WHERE user_email = ?',
         positional: [amount, email],
@@ -50,6 +121,47 @@ class DatabaseService {
     } catch (e) {
       print("Error top up: $e");
       return false;
+    }
+  }
+
+  Future<double> getTodaySpending(String email) async {
+    try {
+      await client.connect();
+      final startOfDay = DateTime.now()
+          .copyWith(hour: 0, minute: 0, second: 0, millisecond: 0)
+          .millisecondsSinceEpoch;
+
+      final result = await client.query(
+        '''
+        SELECT COALESCE(SUM(transaction_amount), 0) as total
+        FROM users_transactions
+        WHERE user_email = ?
+        AND time_record >= ?
+        ''',
+        positional: [email, startOfDay],
+      );
+      return (result.first['total'] as num).toDouble();
+    } catch (e) {
+      print("getTodaySpending error: $e");
+      return 0.0;
+    }
+  }
+
+  Future<Map<String, double>> getDailyBudgetStatus(String email) async {
+    try {
+      final userData = await getUserByEmail(email);
+      final dailyMax = (userData?['daily_max_spending'] as num?)?.toDouble() ?? 0.0;
+      final todaySpent = await getTodaySpending(email);
+      final remaining = (dailyMax - todaySpent).clamp(0.0, dailyMax);
+
+      return {
+        'daily_max': dailyMax,
+        'today_spent': todaySpent,
+        'remaining': remaining,
+      };
+    } catch (e) {
+      print("getDailyBudgetStatus error: $e");
+      return {'daily_max': 0.0, 'today_spent': 0.0, 'remaining': 0.0};
     }
   }
 
@@ -82,14 +194,21 @@ class DatabaseService {
     }
   }
 
+ 
   Future<bool> loginUser(String email, String password) async {
     try {
       await client.connect();
       final result = await client.query(
-      'SELECT * FROM user_identity WHERE user_email = ? AND password = ?',
-      positional: [email, password],
+        'SELECT * FROM user_identity WHERE user_email = ?',
+        positional: [email],
       );
-      return result.isNotEmpty;
+
+      if (result.isEmpty) return false;
+
+      final storedHash = result.first['password'] as String?;
+      if (storedHash == null) return false;
+
+      return _verifyPassword(password, storedHash);
     } catch (e) {
       print("Login error: $e");
       return false;
@@ -110,7 +229,6 @@ class DatabaseService {
     }
   }
 
-  // Save OTP to DB
   Future<void> saveOTP(String email, String otp) async {
     final expiry = DateTime.now().add(const Duration(minutes: 10))
         .millisecondsSinceEpoch;
@@ -121,7 +239,6 @@ class DatabaseService {
     );
   }
 
-// Verify OTP
   Future<bool> verifyOTP(String email, String otp) async {
     await client.connect();
     final result = await client.query(
@@ -136,7 +253,6 @@ class DatabaseService {
     final now = DateTime.now().millisecondsSinceEpoch;
 
     if (storedOtp == otp && now < expiry) {
-      // Mark as verified
       await client.query(
         'UPDATE user_identity SET is_verified = 1, otp = NULL WHERE user_email = ?',
         positional: [email],
@@ -146,20 +262,29 @@ class DatabaseService {
     return false;
   }
 
+  
   Future<void> registerUser(String username, String email, String password) async {
     await client.connect();
+    final hashedPassword = _hashPassword(password); 
     await client.query(
-      'INSERT INTO user_identity (user_name, user_email, password) VALUES (?, ?, ?)',
-      positional: [username, email, password],
+      '''INSERT INTO user_identity (
+        user_name, 
+        user_email, 
+        password, 
+        balance, 
+        monthly_max_spending, 
+        daily_max_spending,
+        daily_balance
+        ) VALUES (?, ?, ?, 0, 0, 0, 0)
+      ''',
+      positional: [username, email, hashedPassword], 
     );
   }
 
-// Transfer to another user
   Future<String> transfer(String senderEmail, String receiverEmail, double amount, String note) async {
     try {
       await client.connect();
 
-      // Check sender exists and has enough balance
       final sender = await client.query(
         'SELECT balance FROM user_identity WHERE user_email = ?',
         positional: [senderEmail],
@@ -169,26 +294,36 @@ class DatabaseService {
       final balance = (sender.first['balance'] as num).toDouble();
       if (balance < amount) return 'Insufficient balance.';
 
-      // Check receiver exists
+      final userData = await client.query(
+        'SELECT daily_max_spending FROM user_identity WHERE user_email = ?',
+        positional: [senderEmail],
+      );
+      final dailyMax = (userData.first['daily_max_spending'] as num?)?.toDouble() ?? 0.0;
+
+      if (dailyMax > 0) {
+        final todaySpent = await getTodaySpending(senderEmail);
+        final remaining = dailyMax - todaySpent;
+        if (amount > remaining) {
+          return 'Daily limit exceeded. Remaining: RM ${remaining.toStringAsFixed(2)} of RM ${dailyMax.toStringAsFixed(2)}';
+        }
+      }
+
       final receiver = await client.query(
         'SELECT user_email FROM user_identity WHERE user_email = ?',
         positional: [receiverEmail],
       );
       if (receiver.isEmpty) return 'Receiver email not found.';
 
-      // Deduct from sender
       await client.query(
         'UPDATE user_identity SET balance = balance - ? WHERE user_email = ?',
         positional: [amount, senderEmail],
       );
 
-      // Add to receiver
       await client.query(
         'UPDATE user_identity SET balance = balance + ? WHERE user_email = ?',
         positional: [amount, receiverEmail],
       );
 
-      // Record transaction
       await client.query(
         'INSERT INTO users_transactions (user_email, transaction_amount, time_record, category) VALUES (?, ?, ?, ?)',
         positional: [senderEmail, amount, DateTime.now().millisecondsSinceEpoch, 'transfer to $receiverEmail'],
