@@ -41,4 +41,62 @@ class DatabaseService {
       return false;
     }
   }
+
+  Future<Map<String, dynamic>?> getUserByEmail(String email) async {
+    try {
+      await client.connect();
+      final result = await client.query(
+        'SELECT * FROM user_identity WHERE user_email = ?',
+        positional: [email],
+      );
+      return result.isNotEmpty ? result.first : null;
+    } catch (e) {
+      print("Fetch user error: $e");
+      return null;
+    }
+  }
+
+  // Save OTP to DB
+  Future<void> saveOTP(String email, String otp) async {
+    final expiry = DateTime.now().add(const Duration(minutes: 10))
+        .millisecondsSinceEpoch;
+    await client.connect();
+    await client.query(
+      'UPDATE user_identity SET otp = ?, otp_expiry = ? WHERE user_email = ?',
+      positional: [otp, expiry, email],
+    );
+  }
+
+// Verify OTP
+  Future<bool> verifyOTP(String email, String otp) async {
+    await client.connect();
+    final result = await client.query(
+      'SELECT otp, otp_expiry FROM user_identity WHERE user_email = ?',
+      positional: [email],
+    );
+
+    if (result.isEmpty) return false;
+
+    final storedOtp = result.first['otp'];
+    final expiry = result.first['otp_expiry'] as int;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    if (storedOtp == otp && now < expiry) {
+      // Mark as verified
+      await client.query(
+        'UPDATE user_identity SET is_verified = 1, otp = NULL WHERE user_email = ?',
+        positional: [email],
+      );
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> registerUser(String username, String email, String password) async {
+    await client.connect();
+    await client.query(
+      'INSERT INTO user_identity (user_name, user_email, password) VALUES (?, ?, ?)',
+      positional: [username, email, password],
+    );
+  }
 }

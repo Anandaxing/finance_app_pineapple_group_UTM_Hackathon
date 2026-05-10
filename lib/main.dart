@@ -1,32 +1,41 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart'; // ← add this
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import 'pages/verify_page.dart';
 import 'pages/login_page.dart';
 import 'pages/register_page.dart';
 import 'pages/home_page.dart';
 
-Future<void> main() async {                              // ← async
-  WidgetsFlutterBinding.ensureInitialized();             // ← add this
-  await dotenv.load(fileName: ".env");                   // ← add this
-  runApp(const MyApp());
+Future<void> main() async {
+
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    print("Warning: .env file not found");
+  }
+
+  runApp(const FinancialApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class FinancialApp extends StatelessWidget {
+  const FinancialApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-
-      // First page when app starts
+      theme: ThemeData.dark(),
+      
       initialRoute: '/login',
 
       routes: {
         '/login': (context) => LoginPage(),
         '/register': (context) => RegisterPage(),
-        '/home': (context) => const HomePage(),
-      },
-    );
-  }
+        '/verify': (context) => const VerifyPage(),  // ← add this
+        '/home': (context) => HomePage(),
+      }, 
+    ); 
+  } 
 }

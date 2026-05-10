@@ -6,14 +6,9 @@ import '../database_service.dart';
 class LoginPage extends StatelessWidget {
   LoginPage({super.key});
 
-  final DatabaseService databaseService =
-    DatabaseService();
-
-  final TextEditingController emailController =
-      TextEditingController();
-
-  final TextEditingController passwordController =
-      TextEditingController();
+  final DatabaseService databaseService = DatabaseService();
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -57,12 +52,8 @@ class LoginPage extends StatelessWidget {
 
             ElevatedButton(
               onPressed: () async {
-              String email =
-                  emailController.text.trim();
-
-              String password =
-                  passwordController.text.trim();
-
+              String email = emailController.text.trim();
+              String password = passwordController.text.trim();
               bool isValid =
                   await databaseService.loginUser(
                     email,
@@ -74,7 +65,8 @@ class LoginPage extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const HomePage(),
+                    builder: (_) => HomePage(),
+                    settings: RouteSettings(arguments: email), // ← move it here
                   ),
                 );
 
@@ -82,6 +74,7 @@ class LoginPage extends StatelessWidget {
 
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
+                    backgroundColor: Colors.red,
                     content: Text(
                       "Invalid email or password",
                     ),
