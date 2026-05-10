@@ -7,7 +7,7 @@ class DatabaseService {
   String _hashPassword(String password) {
     return BCrypt.hashpw(password, BCrypt.gensalt());
   }
-
+  
  
   bool _verifyPassword(String password, String hashed) {
     return BCrypt.checkpw(password, hashed);
@@ -114,14 +114,45 @@ class DatabaseService {
       );
 
       await client.query(
-        'INSERT INTO users_transactions (user_email, transaction_amount, time_record, category) VALUES (?, ?, ?, ?)',
-        positional: [email, amount, DateTime.now().millisecondsSinceEpoch, 'topped up $amount'],
+        'INSERT INTO users_transactions (user_email, transaction_amount, time_record, category, transaction_type) VALUES (?, ?, ?, ?, ?)',
+        positional: [email, amount, DateTime.now().millisecondsSinceEpoch, 'topped up $amount', 'IN'],
       );
       return true; 
     } catch (e) {
       print("Error top up: $e");
       return false;
     }
+  }
+
+  Future<void> _recalculateDailyBalance(String email) async {
+    // Get today's total OUT spending
+    final startOfDay = DateTime.now()
+        .copyWith(hour: 0, minute: 0, second: 0, millisecond: 0)
+        .millisecondsSinceEpoch;
+
+    final spentResult = await client.query(
+      '''
+      SELECT COALESCE(SUM(transaction_amount), 0) as total
+      FROM users_transactions
+      WHERE user_email = ? AND time_record >= ? AND transaction_type = 'OUT'
+      ''',
+      positional: [email, startOfDay],
+    );
+    final todaySpent = (spentResult.first['total'] as num).toDouble();
+
+    // Get daily max
+    final userResult = await client.query(
+      'SELECT daily_max_spending FROM user_identity WHERE user_email = ?',
+      positional: [email],
+    );
+    final dailyMax = (userResult.first['daily_max_spending'] as num?)?.toDouble() ?? 0.0;
+
+    // Update daily_balance
+    final remaining = (dailyMax - todaySpent).clamp(0.0, dailyMax);
+    await client.query(
+      'UPDATE user_identity SET daily_balance = ? WHERE user_email = ?',
+      positional: [remaining, email],
+    );
   }
 
   Future<double> getTodaySpending(String email) async {
@@ -137,9 +168,11 @@ class DatabaseService {
         FROM users_transactions
         WHERE user_email = ?
         AND time_record >= ?
+        AND transaction_type = ?
         ''',
-        positional: [email, startOfDay],
+        positional: [email, startOfDay, 'OUT'],
       );
+
       return (result.first['total'] as num).toDouble();
     } catch (e) {
       print("getTodaySpending error: $e");
@@ -173,9 +206,10 @@ class DatabaseService {
       );
 
       await client.query(
-        'INSERT INTO users_transactions (user_email, transaction_amount, time_record, category) VALUES (?, ?, ?, ?)',
-        positional: [email, amount, DateTime.now().millisecondsSinceEpoch, 'daily automated spending'],
+        'INSERT INTO users_transactions (user_email, transaction_amount, time_record, category, transaction_type) VALUES (?, ?, ?, ?, ?)',
+        positional: [email, amount, DateTime.now().millisecondsSinceEpoch, 'daily automated spending', 'OUT'],
       );
+      await _recalculateDailyBalance(email); // ← add
       return true;
     } catch (e) {
       print("Error subtract balance: $e");
@@ -325,15 +359,16 @@ class DatabaseService {
       );
 
       await client.query(
-        'INSERT INTO users_transactions (user_email, transaction_amount, time_record, category) VALUES (?, ?, ?, ?)',
-        positional: [senderEmail, amount, DateTime.now().millisecondsSinceEpoch, 'transfer to $receiverEmail'],
+        'INSERT INTO users_transactions (user_email, transaction_amount, time_record, category, transaction_type) VALUES (?, ?, ?, ?, ?)',
+        positional: [senderEmail, amount, DateTime.now().millisecondsSinceEpoch, 'transfer to $receiverEmail', 'OUT'],
       );
 
       await client.query(
-        'INSERT INTO users_transactions (user_email, transaction_amount, time_record, category) VALUES (?, ?, ?, ?)',
-        positional: [receiverEmail, amount, DateTime.now().millisecondsSinceEpoch, 'received from $senderEmail'],
+        'INSERT INTO users_transactions (user_email, transaction_amount, time_record, category, transaction_type) VALUES (?, ?, ?, ?, ?)',
+        positional: [receiverEmail, amount, DateTime.now().millisecondsSinceEpoch, 'received from $senderEmail', 'IN'],
       );
-
+      // After both inserts
+      await _recalculateDailyBalance(senderEmail); // ← add
       return 'success';
     } catch (e) {
       print("Transfer error: $e");

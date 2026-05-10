@@ -13,7 +13,11 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final DatabaseService _db = DatabaseService();
   Map<String, dynamic>? _userData;
-  Map<String, double> _budgetStatus = {'daily_max': 0, 'today_spent': 0, 'remaining': 0};
+  Map<String, double> _budgetStatus = {
+    'daily_max': 0,
+    'today_spent': 0,
+    'remaining': 0,
+  };
   bool _isLoading = true;
   String? _email;
 
@@ -32,18 +36,26 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadUser(String email) async {
     final data = await _db.getUserByEmail(email);
-    
+
     if (data != null) {
       double dailyLimit = (data['daily_max_spending'] ?? 0).toDouble();
       String today = DateTime.now().toIso8601String().split('T')[0];
-      
+
       if (dailyLimit > 0 && data['last_automated_date'] != today) {
-        await _db.subtractBalance(email, dailyLimit); 
+        await _db.subtractBalance(email, dailyLimit);
       }
     }
 
+    // Re-fetch after possible subtraction so values are fresh
+    final freshData = await _db.getUserByEmail(email);
+
     setState(() {
-      _userData = data;
+      _userData = freshData;
+      _budgetStatus = {
+        'daily_max':   (freshData?['daily_max_spending'] as num?)?.toDouble() ?? 0.0,
+        'today_spent': ((freshData?['daily_max_spending'] as num?)?.toDouble() ?? 0.0) - ((freshData?['daily_balance'] as num?)?.toDouble() ?? 0.0),
+        'remaining':   (freshData?['daily_balance'] as num?)?.toDouble() ?? 0.0,
+      };
       _isLoading = false;
     });
   }
@@ -155,7 +167,7 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                   margin: const EdgeInsets.symmetric(horizontal: 20),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF111827),
+                    color: Colors.white10,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Colors.white.withOpacity(0.06)),
                   ),
@@ -220,20 +232,6 @@ class _HomePageState extends State<HomePage> {
                         ],
                       ),
                       const SizedBox(height: 10),
-                      Builder(
-                        builder: (context) {
-                          double monthlyLimit = (_userData?['monthly_max_spending'] ?? 0).toDouble();
-                          double balance = (_userData?['balance'] ?? 0).toDouble();
-                          double spent = monthlyLimit > 0 ? (monthlyLimit - balance).clamp(0, monthlyLimit) : 0;
-                          double progress = monthlyLimit > 0 ? (spent / monthlyLimit).clamp(0.0, 1.0) : 0.0;
-                          return LinearProgressIndicator(
-                            value: progress,
-                            backgroundColor: Colors.white10,
-                            color: progress > 0.8 ? Colors.redAccent : Colors.blueAccent,
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 15),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
