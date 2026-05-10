@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'chat_screen.dart';
-import 'set_limit_page.dart'; 
+import 'set_limit_page.dart';
+import 'history_page.dart';
 import '../database_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
-}
+  State<HomePage> createState() => _HomePageState();}
 
 class _HomePageState extends State<HomePage> {
   final DatabaseService _db = DatabaseService();
@@ -21,7 +21,6 @@ class _HomePageState extends State<HomePage> {
   bool _isLoading = true;
   String? _email;
 
-  // Helper method untuk format RM
   String _formatRM(dynamic value) {
     final parsed = double.tryParse(value?.toString() ?? '0') ?? 0.0;
     return parsed.toStringAsFixed(2);
@@ -46,16 +45,12 @@ class _HomePageState extends State<HomePage> {
       }
     }
 
-    // Re-fetch after possible subtraction so values are fresh
     final freshData = await _db.getUserByEmail(email);
+    final budget = await _db.getDailyBudgetStatus(email); // ✅ kira dari transactions
 
     setState(() {
       _userData = freshData;
-      _budgetStatus = {
-        'daily_max':   (freshData?['daily_max_spending'] as num?)?.toDouble() ?? 0.0,
-        'today_spent': ((freshData?['daily_max_spending'] as num?)?.toDouble() ?? 0.0) - ((freshData?['daily_balance'] as num?)?.toDouble() ?? 0.0),
-        'remaining':   (freshData?['daily_balance'] as num?)?.toDouble() ?? 0.0,
-      };
+      _budgetStatus = budget;
       _isLoading = false;
     });
   }
@@ -118,7 +113,6 @@ class _HomePageState extends State<HomePage> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-               
                 Container(
                   margin: const EdgeInsets.all(20),
                   padding: const EdgeInsets.all(20),
@@ -162,7 +156,7 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                 ),
-                
+
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                   margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -210,7 +204,9 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                 ),
+
                 const SizedBox(height: 20),
+
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 20),
                   padding: const EdgeInsets.all(15),
@@ -226,19 +222,19 @@ class _HomePageState extends State<HomePage> {
                         children: [
                           const Text("Monthly Limit Status", style: TextStyle(color: Colors.white70)),
                           Text(
-                            "RM ${_formatRM(_userData?['monthly_max_spending'])}", 
-                            style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)
+                            "RM ${_formatRM(_userData?['monthly_max_spending'])}",
+                            style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 15),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text("Daily Automated", style: TextStyle(color: Colors.white70)),
                           Text(
                             "RM ${_formatRM(_userData?['daily_max_spending'])}/day",
-                            style: const TextStyle(color: Colors.greenAccent)
+                            style: const TextStyle(color: Colors.greenAccent),
                           ),
                         ],
                       ),
@@ -270,7 +266,22 @@ class _HomePageState extends State<HomePage> {
                         },
                       ),
                       _menuItem(context, Icons.event_note, "Set Planning", Colors.green),
-                      _menuItem(context, Icons.history, "History", Colors.orange),
+                      // ✅ History button dengan navigation
+                      _menuItem(
+                        context,
+                        Icons.history,
+                        "History",
+                        Colors.orange,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const HistoryPage(),
+                              settings: RouteSettings(arguments: _email),
+                            ),
+                          );
+                        },
+                      ),
                       _menuItem(context, Icons.category, "Conditions", Colors.red),
                     ],
                   ),

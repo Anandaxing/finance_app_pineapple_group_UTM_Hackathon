@@ -59,73 +59,92 @@ class _HistoryPageState extends State<HistoryPage> {
               : ListView.separated(
                   padding: const EdgeInsets.all(20),
                   itemCount: _transactions.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 10),
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final tx = _transactions[index];
-                    final isTopUp = tx['type'] == 'topup';
-                    final isIncoming = tx['type'] == 'transfer' && tx['receiver_email'] == _email;
 
-                    final Color amountColor = (isTopUp || isIncoming) ? Colors.greenAccent : Colors.redAccent;
-                    final String amountPrefix = (isTopUp || isIncoming) ? '+' : '-';
-                    final IconData icon = isTopUp
-                        ? Icons.add_circle_outline
-                        : isIncoming
-                            ? Icons.arrow_downward_rounded
-                            : Icons.arrow_upward_rounded;
-                    final Color iconColor = (isTopUp || isIncoming)
-                        ? Colors.greenAccent
-                        : Colors.redAccent;
-                    final String title = isTopUp
-                        ? 'Top Up'
-                        : isIncoming
-                            ? 'Received from ${tx['sender_email']}'
-                            : 'Sent to ${tx['receiver_email']}';
+                    
+                    final String transactionType = tx['transaction_type']?.toString() ?? '';
+                    final String category = tx['category']?.toString() ?? '';
+                    final double amount = (tx['transaction_amount'] as num?)?.toDouble() ?? 0.0;
+                    final int timeRecord = (tx['time_record'] as num?)?.toInt() ?? 0;
+
+                    
+                    final bool isIn = transactionType == 'IN';
+                    final bool isOut = transactionType == 'OUT';
+
+                    
+                    final Color amountColor = isIn ? Colors.greenAccent : Colors.redAccent;
+                    final String amountPrefix = isIn ? '+' : '-';
+
+                    IconData icon;
+                    Color iconColor;
+                    String title;
+
+                    if (category.startsWith('topped up')) {
+                      icon = Icons.add_circle_outline;
+                      iconColor = Colors.greenAccent;
+                      title = 'Top Up';
+                    } else if (category.startsWith('received from')) {
+                      icon = Icons.arrow_downward_rounded;
+                      iconColor = Colors.greenAccent;
+                      title = category; // 'received from xxx@email.com'
+                    } else if (category.startsWith('transfer to')) {
+                      icon = Icons.arrow_upward_rounded;
+                      iconColor = Colors.redAccent;
+                      title = category; // 'transfer to xxx@email.com'
+                    } else if (category == 'daily automated spending') {
+                      icon = Icons.autorenew_rounded;
+                      iconColor = Colors.orangeAccent;
+                      title = 'Daily Automated';
+                    } else {
+                      icon = isIn ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded;
+                      iconColor = isIn ? Colors.greenAccent : Colors.redAccent;
+                      title = category.isNotEmpty ? category : (isIn ? 'Incoming' : 'Outgoing');
+                    }
 
                     return Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: const Color(0xFF111827),
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                        border: Border.all(color: Colors.white.withOpacity(0.05)),
                       ),
                       child: Row(
                         children: [
-                          // ── Icon ──
+                          
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: iconColor.withValues(alpha: 0.1),
+                              color: iconColor.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Icon(icon, color: iconColor, size: 22),
                           ),
                           const SizedBox(width: 16),
 
-                          // ── Title + date ──
+                          
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(title,
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                                    overflow: TextOverflow.ellipsis),
-                                const SizedBox(height: 4),
-                                if ((tx['note'] ?? '').toString().isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 4),
-                                    child: Text(tx['note'], style: const TextStyle(color: Colors.white38, fontSize: 12)),
-                                  ),
                                 Text(
-                                  _formatDate(tx['created_at'] as int),
+                                  title,
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _formatDate(timeRecord),
                                   style: const TextStyle(color: Colors.white38, fontSize: 11),
                                 ),
                               ],
                             ),
                           ),
 
-                          // ── Amount ──
+                          
                           Text(
-                            "$amountPrefix RM ${(tx['amount'] as num).toStringAsFixed(2)}",
+                            "$amountPrefix RM ${amount.toStringAsFixed(2)}",
                             style: TextStyle(
                               color: amountColor,
                               fontWeight: FontWeight.bold,

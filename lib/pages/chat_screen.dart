@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key, this.userEmail});
@@ -15,7 +16,7 @@ class _ChatScreenState extends State<ChatScreen> {
   
   bool _isLoading = false;
 
-  final String _apiKey = "AIzaSyAnkqZV1QkFxnQfIYd1QJPs0UtWABy6XDs"; 
+  final String _apiKey = dotenv.env['GEMINI_API_KEY'] ?? ''; 
   late GenerativeModel _model;
   late ChatSession _chatSession;
 
