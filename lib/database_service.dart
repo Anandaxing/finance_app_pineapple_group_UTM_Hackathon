@@ -73,24 +73,7 @@ class DatabaseService {
       return false;
     }
   }
-
-  Future<bool> updateLimits(String email, double maxMonth, double maxDay) async {
-    try {
-      await client.connect();
-      print("updateLimits called → email: $email, maxMonth: $maxMonth, maxDay: $maxDay"); // ← add
-
-      await client.query(
-        'UPDATE user_identity SET monthly_max_spending = ?, daily_max_spending = ?, daily_balance = ? WHERE user_email = ?',
-        positional: [maxMonth, maxDay, maxDay,email],
-      );
-      print("Limit diperbarui: Bulan RM $maxMonth, Hari RM $maxDay");
-      return true;
-    } catch (e) {
-      print("Error update limits: $e");
-      return false;
-    }
-  }
-
+  
   LibsqlClient? _client;
 
   LibsqlClient get client {
@@ -162,17 +145,18 @@ class DatabaseService {
           .copyWith(hour: 0, minute: 0, second: 0, millisecond: 0)
           .millisecondsSinceEpoch;
 
+      print("getTodaySpending → startOfDay: $startOfDay, email: $email"); // ← add
+
       final result = await client.query(
         '''
         SELECT COALESCE(SUM(transaction_amount), 0) as total
         FROM users_transactions
-        WHERE user_email = ?
-        AND time_record >= ?
-        AND transaction_type = ?
+        WHERE user_email = ? AND time_record >= ? AND transaction_type = 'OUT'
         ''',
-        positional: [email, startOfDay, 'OUT'],
+        positional: [email, startOfDay],
       );
 
+      print("getTodaySpending → result: ${result.first}"); // ← add
       return (result.first['total'] as num).toDouble();
     } catch (e) {
       print("getTodaySpending error: $e");
@@ -409,6 +393,27 @@ class DatabaseService {
       return true;
     } catch (e) {
       print("addNote error: $e");
+      return false;
+    }
+  }
+
+  Future<bool> updateLimits(String email, double maxMonth, double maxDay) async {
+    try {
+      await client.connect();
+
+      // Get today's spending first
+      final todaySpent = await getTodaySpending(email);
+      
+      // daily_balance = new limit minus what's already spent today
+      final remaining = (maxDay - todaySpent).clamp(0.0, maxDay);
+
+      await client.query(
+        'UPDATE user_identity SET monthly_max_spending = ?, daily_max_spending = ?, daily_balance = ? WHERE user_email = ?',
+        positional: [maxMonth, maxDay, remaining, email],
+      );
+      return true;
+    } catch (e) {
+      print("Error update limits: $e");
       return false;
     }
   }

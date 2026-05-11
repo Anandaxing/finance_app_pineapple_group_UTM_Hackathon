@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'chat_screen.dart';
 import 'set_limit_page.dart';
+import 'dart:async'; // ← add at top of home_page.dart
 import 'history_page.dart';
 import 'notes_page.dart';
 import '../database_service.dart';
@@ -12,6 +13,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();}
 
 class _HomePageState extends State<HomePage> {
+  Timer? _refreshTimer; // ← add this
   final DatabaseService _db = DatabaseService();
   Map<String, dynamic>? _userData;
   Map<String, double> _budgetStatus = {
@@ -32,6 +34,15 @@ class _HomePageState extends State<HomePage> {
     super.didChangeDependencies();
     _email = ModalRoute.of(context)?.settings.arguments as String?;
     if (_email != null && _userData == null) _loadUser(_email!);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Refresh every 5 seconds
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (_email != null && mounted) _loadUser(_email!);
+    });
   }
 
   Future<void> _loadUser(String email) async {
@@ -141,7 +152,10 @@ class _HomePageState extends State<HomePage> {
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
                             ElevatedButton(
-                              onPressed: () => _showTopUpDialog(),
+                              onPressed: () => {
+                                _showTopUpDialog(),
+                                 if (mounted) _loadUser(_email!) // ← refresh on return
+                                },
                               style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[800]),
                               child: const Text("Add"),
                             ),
@@ -306,13 +320,19 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
+        onPressed: () async {
+          await Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => ChatScreen(userEmail: _email ?? ''),
+              builder: (context) => ChatScreen(
+                userEmail: _email ?? '',
+                onActionExecuted: () {          // ← add this
+                  if (mounted) _loadUser(_email!);
+                },
+              ),
             ),
           );
+          if (mounted) _loadUser(_email!); // ← refresh after chat closes
         },
         backgroundColor: Colors.blueAccent,
         child: const Icon(Icons.chat),
