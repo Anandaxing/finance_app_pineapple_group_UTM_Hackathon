@@ -388,4 +388,57 @@ class DatabaseService {
     );
     return result;
   }
+
+  Future<List<Map<String, dynamic>>> getNotes(String email) async {
+    await client.connect();
+    final result = await client.query(
+      'SELECT * FROM user_notes WHERE user_email = ? ORDER BY updated_at DESC',
+      positional: [email],
+    );
+    return result;
+  }
+
+  Future<bool> addNote(String email, String title, String content) async {
+    try {
+      await client.connect();
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await client.query(
+        'INSERT INTO user_notes (user_email, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+        positional: [email, title, content, now, now],
+      );
+      return true;
+    } catch (e) {
+      print("addNote error: $e");
+      return false;
+    }
+  }
+
+  Future<bool> updateNote(int noteId, String title, String content) async {
+    try {
+      await client.connect();
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await client.query(
+        'UPDATE user_notes SET title = ?, content = ?, updated_at = ? WHERE note_id = ?',
+        positional: [title, content, now, noteId],
+      );
+      return true;
+    } catch (e) {
+      print("updateNote error: $e");
+      return false;
+    }
+  }
+
+  Future<bool> deleteNote(int noteId) async {
+    try {
+      await client.connect();
+      await client.query(
+        'DELETE FROM user_notes WHERE note_id = ?',
+        positional: [noteId],
+      );
+      return true;
+    } catch (e) {
+      print("deleteNote error: $e");
+      return false;
+    }
+  }
 }

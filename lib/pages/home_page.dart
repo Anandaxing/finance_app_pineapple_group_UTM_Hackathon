@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'chat_screen.dart';
 import 'set_limit_page.dart';
 import 'history_page.dart';
+import 'notes_page.dart';
 import '../database_service.dart';
 
 class HomePage extends StatefulWidget {
@@ -111,143 +112,145 @@ class _HomePageState extends State<HomePage> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                Container(
-                  margin: const EdgeInsets.all(20),
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.white24),
-                    borderRadius: BorderRadius.circular(15),
-                    color: Colors.white10,
+          : SingleChildScrollView(
+              child: Column(
+                children: [
+                  Container(
+                    margin: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.white24),
+                      borderRadius: BorderRadius.circular(15),
+                      color: Colors.white10,
+                    ),
+                    child: Column(
+                      children: [
+                        const Text(
+                          "Total Balance",
+                          style: TextStyle(color: Colors.white54, fontSize: 14),
+                        ),
+                        Text(
+                          "RM ${_formatRM(_userData?['balance'])}",
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            ElevatedButton(
+                              onPressed: () => _showTopUpDialog(),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[800]),
+                              child: const Text("Add"),
+                            ),
+                            ElevatedButton(
+                              onPressed: () async {
+                                final result = await Navigator.pushNamed(context, '/transfer', arguments: _email);
+                                if (result == true) _loadUser(_email!);
+                              },
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[800]),
+                              child: const Text("Transfer"),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Column(
-                    children: [
-                      const Text(
-                        "Total Balance",
-                        style: TextStyle(color: Colors.white54, fontSize: 14),
-                      ),
-                      Text(
-                        "RM ${_formatRM(_userData?['balance'])}",
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          ElevatedButton(
-                            onPressed: () => _showTopUpDialog(),
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[800]),
-                            child: const Text("Add"),
-                          ),
-                          ElevatedButton(
-                            onPressed: () async {
-                              final result = await Navigator.pushNamed(context, '/transfer', arguments: _email);
-                              if (result == true) _loadUser(_email!);
-                            },
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[800]),
-                            child: const Text("Transfer"),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
 
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                  margin: const EdgeInsets.symmetric(horizontal: 20),
-                  decoration: BoxDecoration(
-                    color: Colors.white10,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white.withOpacity(0.06)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("DAILY BUDGET", style: TextStyle(color: Colors.white38, fontSize: 11, letterSpacing: 2)),
-                      const SizedBox(height: 12),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: LinearProgressIndicator(
-                          value: _budgetStatus['daily_max']! > 0
-                              ? (_budgetStatus['today_spent']! / _budgetStatus['daily_max']!).clamp(0.0, 1.0)
-                              : 0.0,
-                          minHeight: 8,
-                          backgroundColor: Colors.white10,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            _budgetStatus['remaining']! <= 0
-                                ? Colors.red
-                                : _budgetStatus['today_spent']! / (_budgetStatus['daily_max']! + 0.001) >= 0.75
-                                    ? Colors.orange
-                                    : Colors.greenAccent,
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    margin: const EdgeInsets.symmetric(horizontal: 20),
+                    decoration: BoxDecoration(
+                      color: Colors.white10,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withOpacity(0.06)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("DAILY BUDGET", style: TextStyle(color: Colors.white38, fontSize: 11, letterSpacing: 2)),
+                        const SizedBox(height: 12),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: LinearProgressIndicator(
+                            value: _budgetStatus['daily_max']! > 0
+                                ? (_budgetStatus['today_spent']! / _budgetStatus['daily_max']!).clamp(0.0, 1.0)
+                                : 0.0,
+                            minHeight: 8,
+                            backgroundColor: Colors.white10,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              _budgetStatus['remaining']! <= 0
+                                  ? Colors.red
+                                  : _budgetStatus['today_spent']! / (_budgetStatus['daily_max']! + 0.001) >= 0.75
+                                      ? Colors.orange
+                                      : Colors.greenAccent,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text("Spent: RM ${_budgetStatus['today_spent']!.toStringAsFixed(2)}",
-                              style: const TextStyle(color: Colors.redAccent, fontSize: 13)),
-                          Text("Left: RM ${_budgetStatus['remaining']!.toStringAsFixed(2)}",
-                              style: TextStyle(
-                                color: _budgetStatus['remaining']! <= 0 ? Colors.red : Colors.greenAccent,
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              )),
-                        ],
-                      ),
-                    ],
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text("Spent: RM ${_budgetStatus['today_spent']!.toStringAsFixed(2)}",
+                                style: const TextStyle(color: Colors.redAccent, fontSize: 13)),
+                            Text("Left: RM ${_budgetStatus['remaining']!.toStringAsFixed(2)}",
+                                style: TextStyle(
+                                  color: _budgetStatus['remaining']! <= 0 ? Colors.red : Colors.greenAccent,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                )),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
 
-                const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 20),
-                  padding: const EdgeInsets.all(15),
-                  decoration: BoxDecoration(
-                    color: Colors.white10,
-                    borderRadius: BorderRadius.circular(15),
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: const EdgeInsets.all(15),
+                    decoration: BoxDecoration(
+                      color: Colors.white10,
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text("Monthly Limit Status", style: TextStyle(color: Colors.white70)),
+                            Text(
+                              "RM ${_formatRM(_userData?['monthly_max_spending'])}",
+                              style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 15),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text("Daily Automated", style: TextStyle(color: Colors.white70)),
+                            Text(
+                              "RM ${_formatRM(_userData?['daily_max_spending'])}/day",
+                              style: const TextStyle(color: Colors.greenAccent),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text("Monthly Limit Status", style: TextStyle(color: Colors.white70)),
-                          Text(
-                            "RM ${_formatRM(_userData?['monthly_max_spending'])}",
-                            style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 15),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text("Daily Automated", style: TextStyle(color: Colors.white70)),
-                          Text(
-                            "RM ${_formatRM(_userData?['daily_max_spending'])}/day",
-                            style: const TextStyle(color: Colors.greenAccent),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
 
-                Expanded(
-                  child: GridView.count(
+                  GridView.count(
                     crossAxisCount: 2,
                     padding: const EdgeInsets.all(20),
                     mainAxisSpacing: 10,
                     crossAxisSpacing: 10,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
                     children: [
                       _menuItem(
                         context,
@@ -265,7 +268,21 @@ class _HomePageState extends State<HomePage> {
                           if (result == true) _loadUser(_email!);
                         },
                       ),
-                      _menuItem(context, Icons.event_note, "Set Planning", Colors.green),
+                      _menuItem(
+                        context,
+                        Icons.event_note,
+                        "Self Planning",
+                        Colors.green,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const NotesPage(),
+                              settings: RouteSettings(arguments: _email),
+                            ),
+                          );
+                        },
+                      ),
                       // ✅ History button dengan navigation
                       _menuItem(
                         context,
@@ -285,8 +302,8 @@ class _HomePageState extends State<HomePage> {
                       _menuItem(context, Icons.category, "Conditions", Colors.red),
                     ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
