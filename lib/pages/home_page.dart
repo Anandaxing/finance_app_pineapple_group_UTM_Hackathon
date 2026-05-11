@@ -243,7 +243,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+                        children: [r
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -301,6 +301,20 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                       ),
                                     ),
                                   ),
+                                ],
+                              ),
+                              Row(
+                                children: [
+                                  // --- Add Logout Button Here ---
+                                  IconButton(
+                                    icon: const Icon(Icons.logout_rounded, color: Colors.white30, size: 20),
+                                    onPressed: () {
+                                      // pushReplacementNamed clears the navigation stack so they can't go back
+                                      Navigator.pushReplacementNamed(context, '/login');
+                                    },
+                                  ),
+                                  const SizedBox(width: 8),
+                                  // Your existing Points badge and Avatar...
                                 ],
                               ),
                             ],
