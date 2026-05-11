@@ -1,17 +1,53 @@
-# digital_finance_app
+# Digital_finance_app
 
-A new Flutter project.
+Framework             : Flutter
+Programming Language  : Dart
+Database              : Turso
+AI chat-bot           : Gemini AI BOT
+Emulator              : IOS
 
-## Getting Started
 
-This project is a starting point for a Flutter application.
+Database initialization as follows : 
 
-A few resources to get you started if this is your first Flutter project:
+CREATE TABLE user_identity (
+  user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_name VARCHAR(40),
+  user_email VARCHAR(40),
+  password VARCHAR(255),
+  balance REAL DEFAULT 0.0,
+  monthly_max_spending REAL DEFAULT 0.0,
+  daily_max_spending REAL DEFAULT 0.0,
+  daily_balance REAL DEFAULT 0.0,
+  otp TEXT,
+  otp_expiry INTEGER,
+  is_verified INTEGER DEFAULT 0,
+  last_automated_date TEXT DEFAULT NULL,
+  points INTEGER DEFAULT 0.0.,
+  last_automated_date TEXT DEFAULT NULL
+);
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+CREATE TABLE users_transactions (
+  transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_email VARCHAR(40),
+  transaction_amount DECIMAL(6,2),
+  time_record DATE,
+  category VARCHAR(40),
+  transaction_type VARCHAR(3)
+);
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+CREATE TABLE users_plannings (
+  plan_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_email VARCHAR(40),
+  to_save DECIMAL(6,2),
+  time_record DATE,
+  category VARCHAR(40)
+);
+  
+CREATE TABLE user_notes (
+  note_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_email TEXT NOT NULL,
+  title TEXT NOT NULL,
+  content TEXT,
+  created_at DATE,
+  updated_at DATE
+);
