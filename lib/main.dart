@@ -7,6 +7,11 @@ import 'pages/register_page.dart';
 import 'pages/home_page.dart';
 import 'pages/forgot_password_page.dart';
 import 'pages/reset_password_page.dart';
+import 'pages/leaderboard_page.dart';
+import 'pages/set_limit_page.dart'; // Change to your actual file name
+import 'pages/history_page.dart';
+import 'pages/notes_page.dart';
+
 
 Future<void> main() async {
 
@@ -40,6 +45,10 @@ class FinancialApp extends StatelessWidget {
         '/transfer': (context) => const TransferPage(), // ← add
         '/forgot-password': (context) => const ForgotPasswordPage(),
         '/reset-password': (context) => const ResetPasswordPage(),
+        '/leaderboard': (context) => const LeaderboardPage(),
+        '/setlimit': (context) => const SetLimitPage(), 
+        '/history': (context) => const HistoryPage(),
+        '/notes': (context) => const NotesPage(),
       }, 
     ); 
   } 

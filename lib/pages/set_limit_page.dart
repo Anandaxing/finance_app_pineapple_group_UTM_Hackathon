@@ -70,7 +70,7 @@ class _SetLimitPageState extends State<SetLimitPage> {
     double daily = double.tryParse(_dailyController.text) ?? 0;
 
     if (daily <= 0) {
-      _showErrorSnackBar("Masukkan limit harian yang valid (lebih dari 0).");
+      _showErrorSnackBar("Insert valid daily limit (larger than 0).");
       return;
     }
 
@@ -79,15 +79,15 @@ class _SetLimitPageState extends State<SetLimitPage> {
     // Validasi: limit bulanan tidak boleh melebihi saldo
     if (monthly > _balance) {
       _showErrorSnackBar(
-        "Limit bulanan (RM ${monthly.toStringAsFixed(2)}) melebihi saldo Anda (RM ${_balance.toStringAsFixed(2)}).\n"
-        "Maksimal harian: RM ${(_balance / _daysInCurrentMonth).toStringAsFixed(2)}",
+        "Monthly limit (RM ${monthly.toStringAsFixed(2)}) exceeded your balance (RM ${_balance.toStringAsFixed(2)}).\n"
+        "Daily limit: RM ${(_balance / _daysInCurrentMonth).toStringAsFixed(2)}",
       );
       return;
     }
 
     // Validasi: daily tidak boleh melebihi saldo
     if (daily > _balance) {
-      _showErrorSnackBar("Limit harian tidak boleh melebihi saldo.");
+      _showErrorSnackBar("Daily limit cannot exceed your balance.");
       return;
     }
 
@@ -101,7 +101,7 @@ class _SetLimitPageState extends State<SetLimitPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            "✅ Limit berhasil disimpan!\nHarian: RM ${daily.toStringAsFixed(2)} | Bulanan: RM ${monthly.toStringAsFixed(2)}",
+            "✅ Saved Successfully!\n Limit Daily: RM ${daily.toStringAsFixed(2)} | Monthly: RM ${monthly.toStringAsFixed(2)}",
           ),
           backgroundColor: Colors.green[700],
           duration: const Duration(seconds: 3),
@@ -109,7 +109,7 @@ class _SetLimitPageState extends State<SetLimitPage> {
       );
       Navigator.pop(context, true);
     } else if (mounted) {
-      _showErrorSnackBar("Gagal menyimpan limit. Coba lagi.");
+      _showErrorSnackBar("Failed to save. Please try again");
     }
   }
 
@@ -161,7 +161,7 @@ class _SetLimitPageState extends State<SetLimitPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("💰 Saldo Anda", style: TextStyle(color: Colors.white60, fontSize: 13)),
+                        const Text("💰 Your balance", style: TextStyle(color: Colors.white60, fontSize: 13)),
                         const SizedBox(height: 4),
                         Text(
                           "RM ${_balance.toStringAsFixed(2)}",
@@ -170,9 +170,9 @@ class _SetLimitPageState extends State<SetLimitPage> {
                         const SizedBox(height: 12),
                         Row(
                           children: [
-                            _infoChip("📅 Bulan ini: $_daysInCurrentMonth hari"),
+                            _infoChip("📅 This month: $_daysInCurrentMonth days"),
                             const SizedBox(width: 8),
-                            _infoChip("📊 Maks harian: RM ${(_balance / _daysInCurrentMonth).toStringAsFixed(2)}"),
+                            _infoChip("📊 Daily limit: RM ${(_balance / _daysInCurrentMonth).toStringAsFixed(2)}"),
                           ],
                         ),
                       ],
@@ -195,23 +195,23 @@ class _SetLimitPageState extends State<SetLimitPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text("⚙️ Limit Saat Ini", style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w600)),
+                          const Text("⚙️ Current limit", style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w600)),
                           const SizedBox(height: 12),
-                          _limitRow("Harian", _currentDailyLimit, Colors.greenAccent),
+                          _limitRow("Daily", _currentDailyLimit, Colors.greenAccent),
                           const SizedBox(height: 8),
-                          _limitRow("Bulanan", _currentMonthlyLimit, Colors.blueAccent),
+                          _limitRow("Monthly", _currentMonthlyLimit, Colors.blueAccent),
                         ],
                       ),
                     ),
 
                   // === INPUT DAILY LIMIT ===
                   const Text(
-                    "ATUR LIMIT HARIAN",
+                    "SET YOUR DAILY LIMIT",
                     style: TextStyle(color: Colors.white54, fontSize: 12, letterSpacing: 1.5, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    "Masukkan limit pengeluaran per hari. Limit bulanan akan dihitung otomatis berdasarkan jumlah hari di bulan ini.",
+                    "Insert your daily limit. Monthly limit will be automatically calculated based on the total days in this month.",
                     style: TextStyle(color: Colors.white38, fontSize: 12),
                   ),
                   const SizedBox(height: 16),
@@ -222,7 +222,7 @@ class _SetLimitPageState extends State<SetLimitPage> {
                     style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
                     onChanged: _onDailyChanged,
                     decoration: InputDecoration(
-                      labelText: "Limit Harian (RM)",
+                      labelText: "Daily Limit (RM)",
                       labelStyle: const TextStyle(color: Colors.white54),
                       prefixText: "RM  ",
                       prefixStyle: const TextStyle(color: Colors.white54, fontSize: 22),
@@ -271,9 +271,9 @@ class _SetLimitPageState extends State<SetLimitPage> {
                             ),
                           ),
                           const SizedBox(height: 16),
-                          _calcRow("Daily rimit", "RM ${_calculatedDaily.toStringAsFixed(2)}"),
+                          _calcRow("Daily limit", "RM ${_calculatedDaily.toStringAsFixed(2)}"),
                           const Divider(color: Colors.white12, height: 20),
-                          _calcRow("× Days in this month", "$_daysInCurrentMonth hari"),
+                          _calcRow("× Days in this month", "$_daysInCurrentMonth days"),
                           const Divider(color: Colors.white12, height: 20),
                           _calcRow(
                             "= Monthly limit",
@@ -295,7 +295,7 @@ class _SetLimitPageState extends State<SetLimitPage> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      "Melebihi saldo! Maks: RM ${(_balance / _daysInCurrentMonth).toStringAsFixed(2)}/hari",
+                                      "Exceeding balance! Max: RM ${(_balance / _daysInCurrentMonth).toStringAsFixed(2)}/day",
                                       style: TextStyle(color: Colors.red[300], fontSize: 12),
                                     ),
                                   ),
@@ -317,7 +317,7 @@ class _SetLimitPageState extends State<SetLimitPage> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      "Sisa saldo setelah limit: RM ${(_balance - _calculatedMonthly).toStringAsFixed(2)}",
+                                      "Remaining balance after limit: RM ${(_balance - _calculatedMonthly).toStringAsFixed(2)}",
                                       style: const TextStyle(color: Colors.greenAccent, fontSize: 12),
                                     ),
                                   ),
@@ -349,7 +349,7 @@ class _SetLimitPageState extends State<SetLimitPage> {
                               child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                             )
                           : const Text(
-                              "💾  Simpan Limit",
+                              "💾  Save",
                               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                             ),
                     ),

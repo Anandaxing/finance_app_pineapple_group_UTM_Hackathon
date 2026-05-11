@@ -22,27 +22,73 @@ class _ChatScreenState extends State<ChatScreen> {
   final List<Map<String, String>> _messages = [];
   bool _isLoading = false;
 
-  // System prompt that tells AI what it can do
-  String get _systemPrompt => '''
-You are a smart financial assistant for a digital wallet app. The user's email is ${widget.userEmail}.
-Today's date is ${DateTime.now().toLocal().toString().split(' ')[0]} (${_getDayName()}).
+  Future<String> _buildSystemPrompt() async {
+    final analytics = await _db.getSpendingAnalytics(widget.userEmail);
+    final userData = await _db.getUserByEmail(widget.userEmail);
 
-You can help users manage their finances by performing these actions when they ask.
-When you want to perform an action, respond with JSON in this exact format alongside your message:
+    return '''
+  You are a smart, empathetic financial advisor for a digital wallet app.
+  Today is ${DateTime.now().toLocal().toString().split(' ')[0]} (${_getDayName()}).
+  The user's email is ${widget.userEmail}.
+  The user's name is ${userData?['user_name'] ?? 'User'}.
 
-{"action": "set_daily_limit", "params": {"amount": 50}}
-{"action": "set_monthly_limit", "params": {"amount": 500}}
-{"action": "add_note", "params": {"title": "Budget Plan", "content": "Details here"}}
-{"action": "check_balance", "params": {}}
-{"action": "get_spending_summary", "params": {}}
+  === CURRENT FINANCIAL SNAPSHOT ===
+  Balance: RM ${(analytics['balance'] as double?)?.toStringAsFixed(2) ?? '0.00'}
+  Daily spending limit: RM ${(analytics['daily_max'] as double?)?.toStringAsFixed(2) ?? '0.00'}
+  Monthly spending limit: RM ${(analytics['monthly_max'] as double?)?.toStringAsFixed(2) ?? '0.00'}
+  Spent this month: RM ${(analytics['monthly_spent'] as double?)?.toStringAsFixed(2) ?? '0.00'}
+  Spent last 7 days: RM ${(analytics['weekly_spent'] as double?)?.toStringAsFixed(2) ?? '0.00'}
+  Average daily spending: RM ${(analytics['avg_daily_spending'] as double?)?.toStringAsFixed(2) ?? '0.00'}
 
-Rules:
-- Always confirm with the user before performing an action
-- If the user agrees (says yes/okay/sure/confirm), then include the JSON action
-- Be conversational, helpful, and concise
-- Format amounts in RM (Malaysian Ringgit)
-- If no action is needed, just reply normally without JSON
-''';
+  === SPENDING BREAKDOWN ===
+    Top categories (last 30 days):
+    ${_formatCategories(analytics['top_categories'] as List? ?? [])}
+
+    Daily breakdown (last 7 days):
+    ${_formatDailyBreakdown(analytics['daily_breakdown'] as List? ?? [])}
+
+    Largest transactions (last 30 days):
+    ${_formatLargest(analytics['largest_transactions'] as List? ?? [])}
+
+    === YOUR ROLE ===
+    - Analyse the user's real spending data above and give SPECIFIC, personalised advice
+    - Detect patterns: overspending days, high-cost categories, approaching limits
+    - Proactively warn if monthly limit is close to being exceeded
+    - Suggest realistic daily/monthly limit adjustments based on actual behaviour
+    - Be conversational, warm, and concise — not robotic
+    - When you want to perform an action, include JSON in your response:
+
+    {"action": "set_daily_limit", "params": {"amount": 50}}
+    {"action": "set_monthly_limit", "params": {"amount": 500}}
+    {"action": "add_note", "params": {"title": "Budget Plan", "content": "Details here"}}
+    {"action": "check_balance", "params": {}}
+    {"action": "get_spending_summary", "params": {}}
+
+    - Always confirm before executing any action
+    - After the user agrees, include the JSON action in your response
+    - Use precise word counts, "no fluff" directives, or formatting constraints to force the AI into high-density, minimalist responses.
+    ''';
+    }
+
+    String _formatCategories(List cats) {
+      if (cats.isEmpty) return '  No data yet';
+      return cats.map((c) =>
+        '  - ${c['category']}: RM ${(c['total'] as num).toStringAsFixed(2)} (${c['count']}x)'
+      ).join('\n');
+    }
+
+    String _formatDailyBreakdown(List days) {
+      if (days.isEmpty) return '  No data yet';
+      return days.map((d) => '  - ${d['day']}: RM ${(d['total'] as num).toStringAsFixed(2)}').join('\n');
+    }
+
+    String _formatLargest(List txs) {
+      if (txs.isEmpty) return '  No data yet';
+      return txs.map((t) {
+        final dt = DateTime.fromMillisecondsSinceEpoch(t['time_record'] as int);
+        return '  - RM ${(t['transaction_amount'] as num).toStringAsFixed(2)} — ${t['category']} (${dt.day}/${dt.month})';
+      }).join('\n');
+    }
 
   String _getDayName() {
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -50,86 +96,88 @@ Rules:
   }
 
   Future<void> _sendMessage() async {
-    final text = _controller.text.trim();
-    if (text.isEmpty) return;
+  final text = _controller.text.trim();
+  if (text.isEmpty) return;
+
+  setState(() {
+    _messages.add({'role': 'user', 'content': text});
+    _isLoading = true;
+  });
+  _controller.clear();
+  _scrollToBottom();
+
+  try {
+    final systemPrompt = await _buildSystemPrompt(); // ← async now
+
+    final history = _messages.map((m) => {
+      'role': m['role'] == 'user' ? 'user' : 'model',
+      'parts': [{'text': m['content']}],
+    }).toList();
+
+    final response = await http.post(
+      Uri.parse(
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent'
+        '?key=${dotenv.env['GEMINI_API_KEY']}',
+      ),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'system_instruction': {'parts': [{'text': systemPrompt}]},
+        'contents': history,
+        'generationConfig': {'temperature': 0.7},
+      }),
+    );
+
+    if (response.statusCode == 429) {
+      await Future.delayed(const Duration(seconds: 15));
+      _sendMessage();
+      return;
+    }
+
+    final data = jsonDecode(response.body);
+    print("Gemini response: ${response.statusCode}");
+
+    if (response.statusCode != 200 || data['candidates'] == null) {
+      final errorMsg = data['error']?['message'] ?? 'Unknown API error';
+      setState(() {
+        _messages.add({'role': 'assistant', 'content': 'API Error: $errorMsg'});
+        _isLoading = false;
+      });
+      return;
+    }
+
+    final aiText = data['candidates'][0]['content']['parts'][0]['text'] as String;
+    String displayText = aiText;
+
+    final jsonMatch = RegExp(r'\{[^{}]*"action"[^{}]*\{[^{}]*\}[^{}]*\}', dotAll: true).firstMatch(aiText);
+    if (jsonMatch != null) {
+      try {
+        final jsonStr = jsonMatch.group(0)!;
+        print("Extracted JSON: $jsonStr");
+        final parsed = jsonDecode(jsonStr);
+        final action = parsed['action'] as String;
+        final params = Map<String, dynamic>.from(parsed['params'] as Map? ?? {});
+        final result = await _actionService.executeAction(action, params, widget.userEmail);
+        widget.onActionExecuted?.call();
+        displayText = aiText.replaceAll(jsonStr, '').trim();
+        displayText += '\n\n✅ $result';
+      } catch (e) {
+        print("Action parse error: $e");
+      }
+    }
 
     setState(() {
-      _messages.add({'role': 'user', 'content': text});
-      _isLoading = true;
+      _messages.add({'role': 'assistant', 'content': displayText});
+      _isLoading = false;
     });
-    _controller.clear();
     _scrollToBottom();
 
-    try {
-      // Build conversation history for context
-      final history = _messages.map((m) => {
-        'role': m['role'] == 'user' ? 'user' : 'model',
-        'parts': [{'text': m['content']}],
-      }).toList();
-
-      final response = await http.post(
-        Uri.parse(
-          'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent'
-          '?key=${dotenv.env['GEMINI_API_KEY']}',
-        ),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'system_instruction': {'parts': [{'text': _systemPrompt}]},
-          'contents': history,
-          'generationConfig': {'temperature': 0.7},
-        }),
-      );
-
-      final data = jsonDecode(response.body);
-      // ← Add this debug print
-      print("Gemini response: ${response.statusCode} ${response.body}");
-
-      // ← Check for error before accessing candidates
-      if (response.statusCode != 200 || data['candidates'] == null) {
-        final errorMsg = data['error']?['message'] ?? 'Unknown API error';
-        setState(() {
-          _messages.add({'role': 'assistant', 'content': 'API Error: $errorMsg'});
-          _isLoading = false;
-        });
-        return;
-      }
-
-      final aiText = data['candidates'][0]['content']['parts'][0]['text'] as String;
-
-      // ── Detect and execute action ──
-      String displayText = aiText;
-      final jsonMatch = RegExp(r'\{[^{}]*"action"[^{}]*\{[^{}]*\}[^{}]*\}', dotAll: true).firstMatch(aiText);
-
-      if (jsonMatch != null) {
-        try {
-          final jsonStr = jsonMatch.group(0)!;
-          print("Extracted JSON: $jsonStr"); // ← debug
-          final parsed = jsonDecode(jsonStr);
-          final action = parsed['action'] as String;
-          final params = Map<String, dynamic>.from(parsed['params'] as Map? ?? {});
-
-          final result = await _actionService.executeAction(action, params, widget.userEmail);
-          widget.onActionExecuted?.call(); // ← triggers home page refresh instantlyR
-          displayText = aiText.replaceAll(jsonStr, '').trim();
-          displayText += '\n\n✅ $result';
-        } catch (e) {
-          print("Action parse error: $e");
-        }
-      }
-
-      setState(() {
-        _messages.add({'role': 'assistant', 'content': displayText});
-        _isLoading = false;
-      });
-      _scrollToBottom();
-
-    } catch (e) {
-      setState(() {
-        _messages.add({'role': 'assistant', 'content': 'Error: $e'});
-        _isLoading = false;
-      });
-    }
+  } catch (e) {
+    setState(() {
+      _messages.add({'role': 'assistant', 'content': 'Error: $e'});
+      _isLoading = false;
+    });
   }
+}
 
   void _scrollToBottom() {
     Future.delayed(const Duration(milliseconds: 100), () {
@@ -170,6 +218,10 @@ Rules:
                 _chip("Set daily limit to RM 100"),
                 _chip("How much did I spend today?"),
                 _chip("Add a savings note"),
+                _chip("Analyse my spending"),
+                _chip("Am I overspending?"),
+                _chip("Suggest a better daily limit"),
+                _chip("Where does my money go?"),
               ],
             ),
           ),

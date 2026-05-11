@@ -73,7 +73,7 @@ class DatabaseService {
       return false;
     }
   }
-  
+
   LibsqlClient? _client;
 
   LibsqlClient get client {
@@ -100,6 +100,7 @@ class DatabaseService {
         'INSERT INTO users_transactions (user_email, transaction_amount, time_record, category, transaction_type) VALUES (?, ?, ?, ?, ?)',
         positional: [email, amount, DateTime.now().millisecondsSinceEpoch, 'topped up $amount', 'IN'],
       );
+      await checkSavingsMilestone(email); // ← add this
       return true; 
     } catch (e) {
       print("Error top up: $e");
@@ -444,6 +445,214 @@ class DatabaseService {
     } catch (e) {
       print("deleteNote error: $e");
       return false;
+    }
+  }
+
+  // Award points
+Future<void> awardPoints(String email, int points, String reason) async {
+  try {
+    await client.connect();
+    await client.query(
+      'UPDATE user_identity SET points = COALESCE(points, 0) + ? WHERE user_email = ?',
+      positional: [points, email],
+    );
+    print("Awarded $points points to $email for $reason");
+  } catch (e) {
+    print("awardPoints error: $e");
+  }
+}
+
+// Daily login reward
+Future<bool> claimDailyLogin(String email) async {
+  try {
+    await client.connect();
+    final today = DateTime.now().toIso8601String().split('T')[0];
+    final result = await client.query(
+      'SELECT last_login_date FROM user_identity WHERE user_email = ?',
+      positional: [email],
+    );
+    if (result.isEmpty) return false;
+
+    final lastLogin = result.first['last_login_date'] as String?;
+    if (lastLogin == today) return false; // already claimed today
+
+    await client.query(
+      'UPDATE user_identity SET last_login_date = ? WHERE user_email = ?',
+      positional: [today, email],
+    );
+    await awardPoints(email, 10, 'daily login');
+    return true;
+  } catch (e) {
+    print("claimDailyLogin error: $e");
+    return false;
+  }
+}
+
+// Check and award savings milestone (every RM10 saved)
+  Future<void> checkSavingsMilestone(String email) async {
+    try {
+      await client.connect();
+
+      // Get total IN transactions (top ups + received)
+      final result = await client.query(
+        '''
+        SELECT COALESCE(SUM(transaction_amount), 0) as total
+        FROM users_transactions
+        WHERE user_email = ? AND transaction_type = 'IN'
+        ''',
+        positional: [email],
+      );
+      final totalSaved = (result.first['total'] as num).toDouble();
+
+      // Get previously recorded savings
+      final prev = await client.query(
+        'SELECT saved_amount FROM user_savings WHERE user_email = ?',
+        positional: [email],
+      );
+
+      double prevSaved = 0;
+      if (prev.isEmpty) {
+        await client.query(
+          'INSERT INTO user_savings (user_email, saved_amount, last_updated) VALUES (?, 0, ?)',
+          positional: [email, DateTime.now().millisecondsSinceEpoch],
+        );
+      } else {
+        prevSaved = (prev.first['saved_amount'] as num).toDouble();
+      }
+
+      // Award 100 points for every new RM10 saved
+      final prevMilestones = (prevSaved / 10).floor();
+      final newMilestones = (totalSaved / 10).floor();
+      final milestonesEarned = newMilestones - prevMilestones;
+
+      if (milestonesEarned > 0) {
+        final pointsToAward = milestonesEarned * 100;
+        await awardPoints(email, pointsToAward, 'saved RM${milestonesEarned * 10}');
+        await client.query(
+          'UPDATE user_savings SET saved_amount = ?, last_updated = ? WHERE user_email = ?',
+          positional: [totalSaved, DateTime.now().millisecondsSinceEpoch, email],
+        );
+      }
+    } catch (e) {
+      print("checkSavingsMilestone error: $e");
+    }
+  }
+
+  // Get leaderboard
+  Future<List<Map<String, dynamic>>> getLeaderboard() async {
+    try {
+      await client.connect();
+      final result = await client.query(
+        '''
+        SELECT user_name, user_email, COALESCE(points, 0) as points
+        FROM user_identity
+        ORDER BY points DESC
+        LIMIT 20
+        ''',
+      );
+      return result;
+    } catch (e) {
+      print("getLeaderboard error: $e");
+      return [];
+    }
+  }
+
+  // Get spending analytics for AI
+  Future<Map<String, dynamic>> getSpendingAnalytics(String email) async {
+    try {
+      await client.connect();
+
+      final startOfMonth = DateTime.now()
+          .copyWith(day: 1, hour: 0, minute: 0, second: 0, millisecond: 0)
+          .millisecondsSinceEpoch;
+
+      final start7Days = DateTime.now()
+          .subtract(const Duration(days: 7))
+          .millisecondsSinceEpoch;
+
+      final start30Days = DateTime.now()
+          .subtract(const Duration(days: 30))
+          .millisecondsSinceEpoch;
+
+      // Total spent this month
+      final monthlySpent = await client.query('''
+        SELECT COALESCE(SUM(transaction_amount), 0) as total
+        FROM users_transactions
+        WHERE user_email = ? AND transaction_type = 'OUT' AND time_record >= ?
+      ''', positional: [email, startOfMonth]);
+
+      // Total spent last 7 days
+      final weeklySpent = await client.query('''
+        SELECT COALESCE(SUM(transaction_amount), 0) as total
+        FROM users_transactions
+        WHERE user_email = ? AND transaction_type = 'OUT' AND time_record >= ?
+      ''', positional: [email, start7Days]);
+
+      // Daily breakdown last 7 days
+      final dailyBreakdown = await client.query('''
+        SELECT 
+          date(time_record/1000, 'unixepoch') as day,
+          COALESCE(SUM(transaction_amount), 0) as total
+        FROM users_transactions
+        WHERE user_email = ? AND transaction_type = 'OUT' AND time_record >= ?
+        GROUP BY day
+        ORDER BY day DESC
+      ''', positional: [email, start7Days]);
+
+      // Top spending categories last 30 days
+      final categories = await client.query('''
+        SELECT 
+          category,
+          COALESCE(SUM(transaction_amount), 0) as total,
+          COUNT(*) as count
+        FROM users_transactions
+        WHERE user_email = ? AND transaction_type = 'OUT' AND time_record >= ?
+        GROUP BY category
+        ORDER BY total DESC
+        LIMIT 5
+      ''', positional: [email, start30Days]);
+
+      // Largest single transactions
+      final largestTx = await client.query('''
+        SELECT transaction_amount, category, time_record
+        FROM users_transactions
+        WHERE user_email = ? AND transaction_type = 'OUT' AND time_record >= ?
+        ORDER BY transaction_amount DESC
+        LIMIT 3
+      ''', positional: [email, start30Days]);
+
+      // Average daily spending last 30 days
+      final avgDaily = await client.query('''
+        SELECT COALESCE(AVG(daily_total), 0) as avg
+        FROM (
+          SELECT date(time_record/1000, 'unixepoch') as day,
+                SUM(transaction_amount) as daily_total
+          FROM users_transactions
+          WHERE user_email = ? AND transaction_type = 'OUT' AND time_record >= ?
+          GROUP BY day
+        )
+      ''', positional: [email, start30Days]);
+
+      // Days limit was exceeded (spent > daily_max_spending)
+      final userData = await getUserByEmail(email);
+      final dailyMax = (userData?['daily_max_spending'] as num?)?.toDouble() ?? 0.0;
+      final monthlyMax = (userData?['monthly_max_spending'] as num?)?.toDouble() ?? 0.0;
+      final balance = (userData?['balance'] as num?)?.toDouble() ?? 0.0;
+
+      return {
+        'balance': balance,
+        'daily_max': dailyMax,
+        'monthly_max': monthlyMax,
+        'monthly_spent': (monthlySpent.first['total'] as num).toDouble(),
+        'weekly_spent': (weeklySpent.first['total'] as num).toDouble(),
+        'avg_daily_spending': (avgDaily.first['avg'] as num).toDouble(),
+        'daily_breakdown': dailyBreakdown,
+        'top_categories': categories,
+        'largest_transactions': largestTx,
+      };
+    } catch (e) {
+      print("getSpendingAnalytics error: $e");
+      return {};
     }
   }
 }
